@@ -4,12 +4,15 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/router"
+import { useRouter } from "next/navigation"
 import { Coins, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
 
 export default function Login() {
   const router = useRouter()
@@ -25,21 +28,62 @@ export default function Login() {
     setIsLoading(true)
 
     try {
-      // In a real app, this would use Firebase authentication
-      // For demo purposes, we'll simulate a successful login
-      console.log("Logging in with:", email, password)
+      // Sign in with Firebase Authentication
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      )
+      
+      const user = userCredential.user
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      try {
+        // Update last login timestamp in Firestore
+        const userDocRef = doc(db, "users", user.uid)
+        const userDoc = await getDoc(userDocRef)
+        
+        if (userDoc.exists()) {
+          await updateDoc(userDocRef, {
+            lastLogin: new Date().toISOString()
+          })
+        }
+      } catch (firestoreErr) {
+        // Even if updating last login fails, we can still proceed
+        console.warn("Login successful but failed to update last login time:", firestoreErr)
+      }
 
+      console.log("User logged in successfully:", user.uid)
+      
       // Redirect to dashboard after successful login
       router.push("/dashboard")
-    } catch (err) {
-      setError("Failed to log in. Please check your credentials and try again.")
-      console.error("Login error:", err)
+    } catch (err: any) {
+      // Handle specific Firebase Auth errors with user-friendly messages
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setError("Invalid email or password. Please try again.")
+      } else if (err.code === 'auth/invalid-email') {
+        setError("Please enter a valid email address.")
+      } else if (err.code === 'auth/too-many-requests') {
+        setError("Too many failed login attempts. Please try again later or reset your password.")
+      } else if (err.code === 'auth/user-disabled') {
+        setError("This account has been disabled. Please contact support.")
+      } else {
+        setError("Failed to log in. Please check your credentials and try again.")
+        console.error("Login error:", err)
+      }
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleForgotPassword = () => {
+    if (!email) {
+      setError("Please enter your email address first.")
+      return
+    }
+    
+    // You can implement password reset functionality here
+    // For now, let's just redirect to a hypothetical reset page
+    router.push(`/auth/reset-password?email=${encodeURIComponent(email)}`)
   }
 
   return (
@@ -74,9 +118,13 @@ export default function Login() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link href="#" className="text-xs text-primary hover:underline">
+                <button 
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-xs text-primary hover:underline"
+                >
                   Forgot password?
-                </Link>
+                </button>
               </div>
               <div className="relative">
                 <Input

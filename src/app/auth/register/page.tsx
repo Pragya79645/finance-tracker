@@ -1,15 +1,16 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/router"
+import { useRouter } from "next/navigation"
 import { Coins, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { createUserWithEmailAndPassword } from "firebase/auth"
+import { doc, setDoc } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
 
 export default function Register() {
   const router = useRouter()
@@ -25,6 +26,22 @@ export default function Register() {
     e.preventDefault()
     setError("")
 
+    // Basic form validation
+    if (!name.trim()) {
+      setError("Please enter your name")
+      return
+    }
+
+    if (!email.trim()) {
+      setError("Please enter your email")
+      return
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long")
+      return
+    }
+
     // Validate passwords match
     if (password !== confirmPassword) {
       setError("Passwords do not match")
@@ -34,18 +51,49 @@ export default function Register() {
     setIsLoading(true)
 
     try {
-      // In a real app, this would use Firebase authentication
-      // For demo purposes, we'll simulate a successful registration
-      console.log("Registering with:", name, email, password)
-
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Redirect to dashboard after successful registration
+      // Create user account with Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(
+        auth, 
+        email, 
+        password
+      )
+      
+      const user = userCredential.user
+      
+      try {
+        // Store additional user data in Firestore
+        await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
+          name,
+          email,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString()
+        })
+        console.log("User registered successfully:", user.uid)
+      } catch (firestoreErr: any) {
+        console.error("Firestore error:", firestoreErr)
+        // Even if Firestore fails, we can still proceed if auth succeeded
+        console.warn("Created auth account but failed to save user data to Firestore")
+      }
+      
+      // Redirect to dashboard after successful authentication
+      // (even if Firestore update failed)
       router.push("/dashboard")
-    } catch (err) {
-      setError("Failed to create an account. Please try again.")
-      console.error("Registration error:", err)
+    } catch (err: any) {
+      // Handle specific Firebase Auth errors with user-friendly messages
+      if (err.code === 'auth/email-already-in-use') {
+        setError("This email is already registered. Please try logging in instead.")
+      } else if (err.code === 'auth/invalid-email') {
+        setError("Please enter a valid email address.")
+      } else if (err.code === 'auth/weak-password') {
+        setError("Password is too weak. Please choose a stronger password.")
+      } else if (err.message && err.message.includes("permission-denied")) {
+        setError("Database permission error. Please contact the administrator.")
+        console.error("Firestore permissions error:", err)
+      } else {
+        setError("Failed to create an account. Please try again.")
+        console.error("Registration error:", err)
+      }
     } finally {
       setIsLoading(false)
     }

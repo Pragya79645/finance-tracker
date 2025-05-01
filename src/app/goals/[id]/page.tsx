@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/router"
+import { useRouter } from "next/navigation"
+import { use } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -92,9 +93,9 @@ const mockGoals = [
   },
 ]
 
-export default function GoalDetail() {
+export default function GoalDetail({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { id } = router.query
+  const { id } = use(params)
   const [goal, setGoal] = useState<any>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editedGoal, setEditedGoal] = useState<any>({})

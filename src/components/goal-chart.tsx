@@ -50,7 +50,7 @@ export function GoalChart({ transactions }: GoalChartProps) {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis />
-            <Tooltip formatter={(value: any) => [`$${value}`, "Total Saved"]} labelFormatter={(label) => `Date: ${label}`} />
+            <Tooltip formatter={(value) => [`$${value}`, "Total Saved"]} labelFormatter={(label) => `Date: ${label}`} />
             <Line
               type="monotone"
               dataKey="amount"
